@@ -1,4 +1,4 @@
-# decision-making-in-Superior-Colliculus-7T
+# prediction-in-Superior-Colliculus-7T
 
 The project focuses on modeling superior colliculus responses during a decision-making process that predicts two sensory modalities (vision or somatosensation). Data was collected in high-resolution 7 Tesla fMRI (N=80).
 
