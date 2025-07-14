@@ -1,10 +1,11 @@
 # prediction-in-Superior-Colliculus-7T
 
-Manuscript information: 
+Manuscript title: 
 Modality-specific reactive and predictive BOLD response in the human superior colliculus during visual and somatosensory processing
 
 Danlei Chen1,2,7, Philip A. Kragel3,4, Zoe Kross2, Paul W. Savoca5, Lawrence L. Wald7, Marta Bianciardi6,7, Tor D. Wager8, Ji-Kyung Choi10, Jiahe Zhang2, Karen S. Quigley2,11, Ajay B. Satpute2,5*, Lisa Feldman Barrett2,5,7*, Jordan E. Theriault2,7,12*
 *shared senior authorship
+
 1 Department of Electrical Engineering and Computer Science, Research Laboratory of Electronics, Massachusetts Institute of Technology, Cambridge, MA 02139 USA
  Department of Psychology, Northeastern University, Boston, MA 02115 USA
 3 Institute of Cognitive Science, University of Colorado Boulder, Boulder, CO 80309 USA
