@@ -4,4 +4,4 @@ The project focuses on modeling superior colliculus responses during a time peri
 
 The scripts include univariate analysis of task modeling and warping of first level result on group-specific superior colliculus mask and roi signal extraction and multilevel modeling.
 
-Main analyses were done in Python (Sklearn, Nipype, Nilearn), mixed effects statistical model was done in R (lmer), visualization was mostly done in R (ggplot).
+Main analyses were done in Python (Sklearn, Nipype, Nilearn), mixed effects statistical model was done in R (lmer), visualization was mostly done in R (ggplot) and Freeview.
