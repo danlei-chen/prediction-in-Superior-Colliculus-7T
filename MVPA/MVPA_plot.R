@@ -8,7 +8,7 @@ library(dplyr)
 df <- read_csv('mvpa_classification_results.csv')
 perm_df <- read_csv('mvpa_classification_permutation_results.csv')
 
-perm_plot_df <- perm_df %>% group_by(perm, test_type) %>%
+perm_plot_df <- perm_df %>% group_by(perm, test_type, train_type) %>%
   summarise(accuracy = mean(accuracy), .groups = "drop")
 
 ggplot(df, aes(x = test_type, y = accuracy)) +
