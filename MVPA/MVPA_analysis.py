@@ -1,6 +1,3 @@
-#!/usr/bin/env python
-# coding: utf-8
-
 import pandas as pd
 import nibabel as nib
 import numpy as np
@@ -14,46 +11,72 @@ from sklearn.svm import SVC
 from sklearn.utils import shuffle
 from tqdm import tqdm
 
+stimulation_event_files = pd.read_csv("stimulation_event_files.csv")
+stimulation_img_sc = np.load("stimulation_img_sc.npy")
+decision_event_files = pd.read_csv("decision_event_files.csv")
+decision_img_sc = np.load("decision_img_sc.npy")
+shape_event_files = pd.read_csv("shape_event_files.csv")
+shape_img_sc = np.load("shape_img_sc.npy")
+
+### leave-1-subj-out classification
+
+def split(list_a, chunk_size):
+    for i in range(0, len(list_a), chunk_size):
+        yield list_a[i:i + chunk_size]
+NFolds = 80
+subj_list = np.unique(stimulation_event_files['subject'])
+rand_subj_list = shuffle(subj_list, random_state=0)
+test_group_N = max(1, round(len(rand_subj_list) / NFolds))
+test_groups = list(split(rand_subj_list, test_group_N))
+
+train_test_set = [
+    ('decision','stimulation'), ('decision','decision'),
+    ('stimulation','decision'), ('stimulation','stimulation'),
+    ('shape','stimulation'), ('shape','decision'),
+    ('stimulation','shape'), ('decision','shape'), ('shape','shape')]
+
 output_df = pd.DataFrame(columns=['train_type', 'test_type', 'fold', 'test_subjects', 'accuracy'])
 svc = SVC(kernel='linear')
 
 for k, test_subjects in enumerate(test_groups):
     for train_type, test_type in train_test_set:
         if train_type == 'stimulation':
-            X_train = consequence_concat_img_data2D_masked[[i for i, s in enumerate(consequence_event_files['subject']) if s not in test_subjects], :]
-            y_train = np.array([consequence_event_files['sensory_labels'][i] for i, s in enumerate(consequence_event_files['subject']) if s not in test_subjects])
+            X_train = stimulation_img_sc[[i for i, s in enumerate(stimulation_event_files['subject']) if s not in test_subjects], :]
+            y_train = np.array([stimulation_event_files['sensory_labels'][i] for i, s in enumerate(stimulation_event_files['subject']) if s not in test_subjects])
         elif train_type == 'decision':
-            X_train = selection_concat_img_data2D_masked[[i for i, s in enumerate(selection_event_files['subject']) if s not in test_subjects and selection_event_files['decision_labels'][i] != 'shape'], :]
-            y_train = np.array([selection_event_files['sensory_labels'][i] for i, s in enumerate(selection_event_files['subject']) if s not in test_subjects and selection_event_files['decision_labels'][i] != 'shape'])
+            X_train = decision_img_sc[[i for i, s in enumerate(decision_event_files['subject']) if s not in test_subjects], :]
+            y_train = np.array([decision_event_files['sensory_labels'][i] for i, s in enumerate(decision_event_files['subject']) if s not in test_subjects])
         elif train_type == 'shape':
-            X_train = selection_concat_img_data2D_masked[[i for i, s in enumerate(selection_event_files['subject']) if s not in test_subjects and selection_event_files['decision_labels'][i] == 'shape'], :]
-            y_train = np.array([selection_event_files['sensory_labels'][i] for i, s in enumerate(selection_event_files['subject']) if s not in test_subjects and selection_event_files['decision_labels'][i] == 'shape'])
+            X_train = shape_img_sc[[i for i, s in enumerate(shape_event_files['subject']) if s not in test_subjects], :]
+            y_train = np.array([shape_event_files['sensory_labels'][i] for i, s in enumerate(shape_event_files['subject']) if s not in test_subjects])
         
         if test_type == 'stimulation':
-            X_test = consequence_concat_img_data2D_masked[[i for i, s in enumerate(consequence_event_files['subject']) if s in test_subjects], :]
-            y_test = np.array([consequence_event_files['sensory_labels'][i] for i, s in enumerate(consequence_event_files['subject']) if s in test_subjects])
+            X_test = stimulation_img_sc[[i for i, s in enumerate(stimulation_event_files['subject']) if s in test_subjects], :]
+            y_test = np.array([stimulation_event_files['sensory_labels'][i] for i, s in enumerate(stimulation_event_files['subject']) if s in test_subjects])
         elif test_type == 'decision':
-            X_test = selection_concat_img_data2D_masked[[i for i, s in enumerate(selection_event_files['subject']) if s in test_subjects and selection_event_files['decision_labels'][i] != 'shape'], :]
-            y_test = np.array([selection_event_files['sensory_labels'][i] for i, s in enumerate(selection_event_files['subject']) if s in test_subjects and selection_event_files['decision_labels'][i] != 'shape'])
+            X_test = decision_img_sc[[i for i, s in enumerate(decision_event_files['subject']) if s in test_subjects], :]
+            y_test = np.array([decision_event_files['sensory_labels'][i] for i, s in enumerate(decision_event_files['subject']) if s in test_subjects])
         elif test_type == 'shape':
-            X_test = selection_concat_img_data2D_masked[[i for i, s in enumerate(selection_event_files['subject']) if s in test_subjects and selection_event_files['decision_labels'][i] == 'shape'], :]
-            y_test = np.array([selection_event_files['sensory_labels'][i] for i, s in enumerate(selection_event_files['subject']) if s in test_subjects and selection_event_files['decision_labels'][i] == 'shape'])
+            X_test = shape_img_sc[[i for i, s in enumerate(shape_event_files['subject']) if s in test_subjects], :]
+            y_test = np.array([shape_event_files['sensory_labels'][i] for i, s in enumerate(shape_event_files['subject']) if s in test_subjects])
         
         svc.fit(X_train, y_train)
         y_pred = svc.predict(X_test)
         acc = np.mean(y_pred == y_test)
         output_df = pd.concat([output_df, pd.DataFrame([[train_type, test_type, k, test_subjects, acc]], 
                                                         columns=['train_type', 'test_type', 'fold', 'test_subjects', 'accuracy'])], ignore_index=True)
-
+                                                        
+### paired leave-2-out classification with subject-wise label shuffling for permutation test
 subj_to_label = {}
-for s, lab in zip(consequence_event_files['subject'], consequence_event_files['sensory_labels']):
+for s, lab in zip(stimulation_event_files['subject'], stimulation_event_files['sensory_labels']):
     if s not in subj_to_label:
         subj_to_label[s] = lab
 
+# Identify the two sensory-label groups present in the stimulation data
 labels_present = sorted(list(set(subj_to_label.values())))
 label_a, label_b = labels_present[0], labels_present[1]
-subj_list = np.unique([i.split('/')[-1].split('wdata_')[1].split('_')[0] for i in consequence_all_files])
 
+subj_list = np.unique(stimulation_event_files['subject'])
 group_a = [s for s in subj_list if subj_to_label.get(s, None) == label_a]
 group_b = [s for s in subj_list if subj_to_label.get(s, None) == label_b]
 
@@ -74,24 +97,24 @@ svc = SVC(kernel='linear')
 for k, test_subjects in enumerate(test_groups):
     for train_type, test_type in train_test_set:
         if train_type == 'stimulation':
-            X_train = consequence_concat_img_data2D_masked[[i for i, s in enumerate(consequence_event_files['subject']) if s not in test_subjects], :]
-            y_train = np.array([consequence_event_files['sensory_labels'][i] for i, s in enumerate(consequence_event_files['subject']) if s not in test_subjects])
+            X_train = stimulation_img_sc[[i for i, s in enumerate(stimulation_event_files['subject']) if s not in test_subjects], :]
+            y_train = np.array([stimulation_event_files['sensory_labels'][i] for i, s in enumerate(stimulation_event_files['subject']) if s not in test_subjects])
         elif train_type == 'decision':
-            X_train = selection_concat_img_data2D_masked[[i for i, s in enumerate(selection_event_files['subject']) if s not in test_subjects and selection_event_files['decision_labels'][i] != 'shape'], :]
-            y_train = np.array([selection_event_files['sensory_labels'][i] for i, s in enumerate(selection_event_files['subject']) if s not in test_subjects and selection_event_files['decision_labels'][i] != 'shape'])
+            X_train = decision_img_sc[[i for i, s in enumerate(decision_event_files['subject']) if s not in test_subjects], :]
+            y_train = np.array([decision_event_files['sensory_labels'][i] for i, s in enumerate(decision_event_files['subject']) if s not in test_subjects])
         elif train_type == 'shape':
-            X_train = selection_concat_img_data2D_masked[[i for i, s in enumerate(selection_event_files['subject']) if s not in test_subjects and selection_event_files['decision_labels'][i] == 'shape'], :]
-            y_train = np.array([selection_event_files['sensory_labels'][i] for i, s in enumerate(selection_event_files['subject']) if s not in test_subjects and selection_event_files['decision_labels'][i] == 'shape'])
+            X_train = shape_img_sc[[i for i, s in enumerate(shape_event_files['subject']) if s not in test_subjects], :]
+            y_train = np.array([shape_event_files['sensory_labels'][i] for i, s in enumerate(shape_event_files['subject']) if s not in test_subjects])
         
         if test_type == 'stimulation':
-            X_test = consequence_concat_img_data2D_masked[[i for i, s in enumerate(consequence_event_files['subject']) if s in test_subjects], :]
-            y_test = np.array([consequence_event_files['sensory_labels'][i] for i, s in enumerate(consequence_event_files['subject']) if s in test_subjects])
+            X_test = stimulation_img_sc[[i for i, s in enumerate(stimulation_event_files['subject']) if s in test_subjects], :]
+            y_test = np.array([stimulation_event_files['sensory_labels'][i] for i, s in enumerate(stimulation_event_files['subject']) if s in test_subjects])
         elif test_type == 'decision':
-            X_test = selection_concat_img_data2D_masked[[i for i, s in enumerate(selection_event_files['subject']) if s in test_subjects and selection_event_files['decision_labels'][i] != 'shape'], :]
-            y_test = np.array([selection_event_files['sensory_labels'][i] for i, s in enumerate(selection_event_files['subject']) if s in test_subjects and selection_event_files['decision_labels'][i] != 'shape'])
+            X_test = decision_img_sc[[i for i, s in enumerate(decision_event_files['subject']) if s in test_subjects], :]
+            y_test = np.array([decision_event_files['sensory_labels'][i] for i, s in enumerate(decision_event_files['subject']) if s in test_subjects])
         elif test_type == 'shape':
-            X_test = selection_concat_img_data2D_masked[[i for i, s in enumerate(selection_event_files['subject']) if s in test_subjects and selection_event_files['decision_labels'][i] == 'shape'], :]
-            y_test = np.array([selection_event_files['sensory_labels'][i] for i, s in enumerate(selection_event_files['subject']) if s in test_subjects and selection_event_files['decision_labels'][i] == 'shape'])
+            X_test = shape_img_sc[[i for i, s in enumerate(shape_event_files['subject']) if s in test_subjects], :]
+            y_test = np.array([shape_event_files['sensory_labels'][i] for i, s in enumerate(shape_event_files['subject']) if s in test_subjects])
         
         svc.fit(X_train, y_train)
         y_pred = svc.predict(X_test)
@@ -102,6 +125,7 @@ for k, test_subjects in enumerate(test_groups):
 output_df.to_csv('mvpa_classification_paired_leave2out.csv', index=False)
 print(f"Mean accuracy: {np.mean(output_df['accuracy']):.4f}")
 
+### permutation test with subject-wise label shuffling
 summary_df = output_df.groupby(['train_type', 'test_type'], as_index=False)['accuracy'].agg(['mean', 'sem']).reset_index().rename(columns={'mean': 'mean_accuracy', 'sem': 'sem_accuracy'})
 
 def permute_labels_by_subject(subjects_per_sample, y_labels, rng=None):
@@ -133,30 +157,30 @@ for perm in tqdm(range(start_permutation, n_permutations), desc="Permutation Tes
     for k, test_subjects in enumerate(test_groups):
         for train_type, test_type in train_test_set:
             if train_type == 'stimulation':
-                train_idx = [i for i, s in enumerate(consequence_event_files['subject']) if s not in test_subjects]
-                X_train = consequence_concat_img_data2D_masked[train_idx, :]
-                y_train = np.array([consequence_event_files['sensory_labels'][i] for i in train_idx])
-                subjects_train = np.array([consequence_event_files['subject'][i] for i in train_idx])
+                train_idx = [i for i, s in enumerate(stimulation_event_files['subject']) if s not in test_subjects]
+                X_train = stimulation_img_sc[train_idx, :]
+                y_train = np.array([stimulation_event_files['sensory_labels'][i] for i in train_idx])
+                subjects_train = np.array([stimulation_event_files['subject'][i] for i in train_idx])
             elif train_type == 'decision':
-                train_idx = [i for i, s in enumerate(selection_event_files['subject']) if s not in test_subjects and selection_event_files['decision_labels'][i] != 'shape']
-                X_train = selection_concat_img_data2D_masked[train_idx, :]
-                y_train = np.array([selection_event_files['sensory_labels'][i] for i in train_idx])
-                subjects_train = np.array([selection_event_files['subject'][i] for i in train_idx])
+                train_idx = [i for i, s in enumerate(decision_event_files['subject']) if s not in test_subjects]
+                X_train = decision_img_sc[train_idx, :]
+                y_train = np.array([decision_event_files['sensory_labels'][i] for i in train_idx])
+                subjects_train = np.array([decision_event_files['subject'][i] for i in train_idx])
             elif train_type == 'shape':
-                train_idx = [i for i, s in enumerate(selection_event_files['subject']) if s not in test_subjects and selection_event_files['decision_labels'][i] == 'shape']
-                X_train = selection_concat_img_data2D_masked[train_idx, :]
-                y_train = np.array([selection_event_files['sensory_labels'][i] for i in train_idx])
-                subjects_train = np.array([selection_event_files['subject'][i] for i in train_idx])
+                train_idx = [i for i, s in enumerate(shape_event_files['subject']) if s not in test_subjects]
+                X_train = shape_img_sc[train_idx, :]
+                y_train = np.array([shape_event_files['sensory_labels'][i] for i in train_idx])
+                subjects_train = np.array([shape_event_files['subject'][i] for i in train_idx])
             
             if test_type == 'stimulation':
-                X_test = consequence_concat_img_data2D_masked[[i for i, s in enumerate(consequence_event_files['subject']) if s in test_subjects], :]
-                y_test = np.array([consequence_event_files['sensory_labels'][i] for i, s in enumerate(consequence_event_files['subject']) if s in test_subjects])
+                X_test = stimulation_img_sc[[i for i, s in enumerate(stimulation_event_files['subject']) if s in test_subjects], :]
+                y_test = np.array([stimulation_event_files['sensory_labels'][i] for i, s in enumerate(stimulation_event_files['subject']) if s in test_subjects])
             elif test_type == 'decision':
-                X_test = selection_concat_img_data2D_masked[[i for i, s in enumerate(selection_event_files['subject']) if s in test_subjects and selection_event_files['decision_labels'][i] != 'shape'], :]
-                y_test = np.array([selection_event_files['sensory_labels'][i] for i, s in enumerate(selection_event_files['subject']) if s in test_subjects and selection_event_files['decision_labels'][i] != 'shape'])
+                X_test = decision_img_sc[[i for i, s in enumerate(decision_event_files['subject']) if s in test_subjects], :]
+                y_test = np.array([decision_event_files['sensory_labels'][i] for i, s in enumerate(decision_event_files['subject']) if s in test_subjects])
             elif test_type == 'shape':
-                X_test = selection_concat_img_data2D_masked[[i for i, s in enumerate(selection_event_files['subject']) if s in test_subjects and selection_event_files['decision_labels'][i] == 'shape'], :]
-                y_test = np.array([selection_event_files['sensory_labels'][i] for i, s in enumerate(selection_event_files['subject']) if s in test_subjects and selection_event_files['decision_labels'][i] == 'shape'])
+                X_test = shape_img_sc[[i for i, s in enumerate(shape_event_files['subject']) if s in test_subjects], :]
+                y_test = np.array([shape_event_files['sensory_labels'][i] for i, s in enumerate(shape_event_files['subject']) if s in test_subjects])
             
             rng = np.random.default_rng(seed=perm)
             y_train_perm = permute_labels_by_subject(subjects_train, y_train, rng=rng)
